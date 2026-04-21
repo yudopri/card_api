@@ -56,13 +56,26 @@ def scan_verify():
         return jsonify({"msg": "ID Card not found"}), 404
 
     # b. Save scanned_image to /uploads/scans/
-    filename = secure_filename(scanned_image.filename)
+    import uuid
+    import time
+    
+    # Sanitasi qr_code untuk jadi bagian nama file
+    safe_qr_prefix = "".join([c for c in qr_code if c.isalnum() or c in ('-', '_')]).strip()
+    
+    # Cek apakah filename mengandung URL atau ilegal
+    original_filename = secure_filename(scanned_image.filename)
+    if not original_filename or "://" in scanned_image.filename or original_filename == "":
+        extension = scanned_image.content_type.split('/')[-1] if scanned_image.content_type else 'jpg'
+        extension = "".join([c for c in extension if c.isalnum()])
+        final_filename = f"scan_{int(time.time())}_{uuid.uuid4().hex[:8]}.{extension}"
+    else:
+        final_filename = f"{uuid.uuid4().hex[:8]}_{original_filename}"
+
     upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'scans')
     if not os.path.exists(upload_dir):
         os.makedirs(upload_dir)
 
-    import uuid
-    save_path = os.path.join(upload_dir, f"{uuid.uuid4()}_{filename}")
+    save_path = os.path.join(upload_dir, f"{safe_qr_prefix}_{final_filename}")
     scanned_image.save(save_path)
 
     # c. Calculate pHash

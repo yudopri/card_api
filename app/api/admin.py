@@ -67,14 +67,33 @@ def register_id():
     if IDCard.query.filter_by(qr_code=qr_code).first():
         return jsonify({"msg": "QR Code already registered"}), 400
 
-    filename = secure_filename(file.filename)
-    # create timestamp for file uniqueness in production, but following simple upload path here
+    # Ensure qr_code folder name is safe
+    safe_qr_code = "".join([c for c in qr_code if c.isalnum() or c in ('-', '_')]).strip()
+    if not safe_qr_code:
+        safe_qr_code = "unknown_qr"
+
+    import uuid
+    import time
+    
+    # Try to get a clean filename from the uploaded file
+    original_filename = secure_filename(file.filename)
+    
+    # If the filename still looks like a URL or is empty, force a clean name
+    if not original_filename or "://" in file.filename or original_filename == "":
+        extension = file.content_type.split('/')[-1] if file.content_type else 'jpg'
+        # Remove any potential query params or illegal chars from extension
+        extension = "".join([c for c in extension if c.isalnum()])
+        final_filename = f"upload_{int(time.time())}_{uuid.uuid4().hex[:8]}.{extension}"
+    else:
+        # Even with secure_filename, let's make sure it doesn't have path separators
+        final_filename = f"{uuid.uuid4().hex[:8]}_{original_filename}"
+
     # save path: /uploads/master/
     upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'master')
     if not os.path.exists(upload_dir):
         os.makedirs(upload_dir)
         
-    image_path = os.path.join(upload_dir, f"{qr_code}_{filename}")
+    image_path = os.path.join(upload_dir, f"{safe_qr_code}_{final_filename}")
     file.save(image_path)
 
     # Calculate pHash
