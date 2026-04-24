@@ -24,6 +24,7 @@ class IDCard(db.Model):
     job_title = db.Column(db.String(128), nullable=True)
     qr_code = db.Column(db.String(128), unique=True, nullable=False)
     id_card_image_path = db.Column(db.String(256))
+    unique_crop_path = db.Column(db.String(256))  # Field baru untuk potongan unik
     phash_value = db.Column(db.String(64))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flasgger import Swagger
 from flask_cors import CORS
 from app.core.config import Config
@@ -10,6 +10,7 @@ from app.api.history import history_bp
 from app.models.models import User
 import sys
 import os
+import time
 
 # Add the current directory to sys.path to allow 'app' imports when running as a script
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
@@ -18,6 +19,38 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
     
+    # Logger setup for response logging
+    @app.after_request
+    def log_response_info(response):
+        # Calculate process time
+        now = time.time()
+        duration = round(now - getattr(request, 'start_time', now), 4)
+        
+        # Log common info
+        log_msg = (
+            f"[{request.method}] {request.path} "
+            f"| Status: {response.status_code} "
+            f"| IP: {request.remote_addr} "
+            f"| Time: {duration}s"
+        )
+        
+        # Log specific error details if status >= 400
+        if response.status_code >= 400:
+            try:
+                # Try to extract message from JSON response
+                data = response.get_json()
+                if data and 'msg' in data:
+                    log_msg += f" | ErrorMsg: {data['msg']}"
+            except Exception:
+                pass
+                
+        app.logger.info(log_msg)
+        return response
+
+    @app.before_request
+    def start_timer():
+        request.start_time = time.time()
+
     # Enable CORS for all routes and origins
     CORS(app)
 

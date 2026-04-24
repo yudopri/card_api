@@ -39,6 +39,10 @@ def register_id():
         in: formData
         type: file
         required: true
+      - name: unique_crop_photo
+        in: formData
+        type: file
+        required: true
     responses:
       201:
         description: Registered successfully
@@ -57,15 +61,37 @@ def register_id():
     job_title = request.form.get('job_title')
     qr_code = request.form.get('qr_code')
     file = request.files.get('id_card_photo')
-    qr_code = request.form.get('qr_code')
-    file = request.files.get('id_card_photo')
+    crop_file = request.files.get('unique_crop_photo')
 
-    if not all([fullname, qr_code, file]):
-        return jsonify({"msg": "Missing fullname, qr_code or id_card_photo"}), 400
+    current_app.logger.debug(f"Register-ID request: fullname={fullname}, nip={nip}, job_title={job_title}, qr_code={qr_code}, has_file={file is not None}, has_crop={crop_file is not None}")
 
-    # Ensure qr_code is unique
-    if IDCard.query.filter_by(qr_code=qr_code).first():
-        return jsonify({"msg": "QR Code already registered"}), 400
+    if not all([fullname, qr_code, file, crop_file]):
+        return jsonify({
+            "msg": "Missing fullname, qr_code, id_card_photo or unique_crop_photo",
+            "received": {
+                "fullname": fullname,
+                "nip": nip,
+                "job_title": job_title,
+                "qr_code": qr_code,
+                "has_photo": file is not None,
+                "has_crop": crop_file is not None
+            }
+        }), 400
+
+    # Ensure qr_code is unique (stripping whitespace)
+    qr_code = qr_code.strip()
+    existing_card = IDCard.query.filter_by(qr_code=qr_code).first()
+    if existing_card:
+        return jsonify({
+            "msg": f"QR Code is already registered to {existing_card.fullname} (NIP: {existing_card.nip})",
+            "status": "error",
+            "error_code": "ALREADY_REGISTERED",
+            "details": {
+                "fullname": existing_card.fullname,
+                "nip": existing_card.nip,
+                "qr_code": qr_code
+            }
+        }), 400
 
     # Ensure qr_code folder name is safe
     safe_qr_code = "".join([c for c in qr_code if c.isalnum() or c in ('-', '_')]).strip()
@@ -96,6 +122,11 @@ def register_id():
     image_path = os.path.join(upload_dir, f"{safe_qr_code}_{final_filename}")
     file.save(image_path)
 
+    # Save unique crop photo
+    crop_filename = f"crop_{final_filename}"
+    crop_path = os.path.join(upload_dir, f"{safe_qr_code}_{crop_filename}")
+    crop_file.save(crop_path)
+
     # Calculate pHash
     phash_value = calculate_phash(image_path)
     if phash_value is None:
@@ -112,6 +143,7 @@ def register_id():
         job_title=job_title,
         qr_code=qr_code,
         id_card_image_path=image_path,
+        unique_crop_path=crop_path,
         phash_value=phash_value
     )
     db.session.add(new_card)
