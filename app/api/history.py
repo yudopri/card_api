@@ -84,7 +84,7 @@ def get_history_logs():
             "id_card_fullname": log.id_card.fullname,
             "id_card_qr": log.id_card.qr_code,
             "status": log.status,
-            "created_at": log.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            "created_at": log.created_at.strftime('%Y-%m-%dT%H:%M:%SZ'),
             "match_score": float(log.match_score) if log.match_score is not None else 0.0,
             "liveness_score": float(log.liveness_score) if log.liveness_score is not None else 0.0,
             "original_image_url": get_image_url(log.id_card.unique_crop_path or log.id_card.id_card_image_path),
