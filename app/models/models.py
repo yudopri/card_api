@@ -36,6 +36,8 @@ class Logbook(db.Model):
     scan_image_path = db.Column(db.String(256))
     status = db.Column(db.String(20)) # statuses: 'verified', 'fake', 'duplicate', 'failed'
     ai_confidence_score = db.Column(db.Float)
+    match_score = db.Column(db.Float)
+    liveness_score = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     id_card = db.relationship('IDCard', backref=db.backref('logs', lazy=True))

@@ -1,8 +1,20 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from app.models.models import Logbook, IDCard, User
+import os
 
 history_bp = Blueprint('history', __name__)
+
+def get_image_url(absolute_path):
+    if not absolute_path:
+        return None
+    norm_path = os.path.normpath(absolute_path)
+    upload_folder = os.path.normpath(current_app.config['UPLOAD_FOLDER'])
+    
+    if upload_folder in norm_path:
+        relative_path = norm_path.split(upload_folder)[-1].replace('\\', '/').lstrip('/')
+        return f"{request.host_url.rstrip('/')}/uploads/{relative_path}"
+    return None
 
 @history_bp.route('/logs', methods=['GET'])
 @jwt_required()
@@ -71,16 +83,16 @@ def get_history_logs():
             "id": log.id,
             "id_card_fullname": log.id_card.fullname,
             "id_card_qr": log.id_card.qr_code,
-            "petugas_username": log.petugas.username,
-            "scan_image_path": log.scan_image_path,
             "status": log.status,
-            "ai_confidence_score": log.ai_confidence_score,
-            "created_at": log.created_at.isoformat()
+            "created_at": log.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            "match_score": float(log.match_score) if log.match_score is not None else 0.0,
+            "liveness_score": float(log.liveness_score) if log.liveness_score is not None else 0.0,
+            "original_image_url": get_image_url(log.id_card.unique_crop_path or log.id_card.id_card_image_path),
+            "scanned_image_url": get_image_url(log.scan_image_path)
         })
 
     return jsonify({
-        "total": logs_pagination.total,
+        "logs": results,
         "pages": logs_pagination.pages,
-        "current_page": logs_pagination.page,
-        "logs": results
+        "total": logs_pagination.total
     }), 200

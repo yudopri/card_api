@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flasgger import Swagger
 from flask_cors import CORS
 from app.core.config import Config
@@ -18,6 +18,11 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    # Serve uploads folder
+    @app.route('/uploads/<path:filename>')
+    def uploaded_file(filename):
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
     
     # Logger setup for response logging
     @app.after_request

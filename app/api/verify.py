@@ -9,6 +9,19 @@ import os
 
 verify_bp = Blueprint("verify", __name__)
 
+def get_image_url(absolute_path):
+    if not absolute_path:
+        return None
+    # Convert absolute path to relative URL component
+    # Handle both Windows and Unix paths by replacing backslashes and finding index of 'uploads'
+    norm_path = os.path.normpath(absolute_path)
+    upload_folder = os.path.normpath(current_app.config['UPLOAD_FOLDER'])
+    
+    if upload_folder in norm_path:
+        relative_path = norm_path.split(upload_folder)[-1].replace('\\', '/').lstrip('/')
+        return f"{request.host_url.rstrip('/')}/uploads/{relative_path}"
+    return None
+
 @verify_bp.route("/scan", methods=["POST"])
 @jwt_required()
 def scan_verify():
@@ -89,6 +102,8 @@ def scan_verify():
         petugas_id=current_user_id,
         scan_image_path=save_path,
         status=status,
+        match_score=float(match_score),
+        liveness_score=float(liveness_score),
         ai_confidence_score=match_score
     )
     db.session.add(new_log)
@@ -96,8 +111,10 @@ def scan_verify():
 
     return jsonify({
         "status": status,
-        "match_score": round(match_score, 4),
-        "liveness_score": liveness_score,
         "fullname": id_card.fullname,
-        "nip": id_card.nip
+        "nip": id_card.nip,
+        "match_score": float(match_score),
+        "liveness_score": float(liveness_score),
+        "original_image_url": get_image_url(master_crop_path),
+        "scanned_image_url": get_image_url(save_path)
     }), 200
