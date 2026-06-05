@@ -90,10 +90,15 @@ def scan_verify():
     match_score = compute_feature_match_score(master_crop_path, save_path)
     liveness_score, liveness_status = analyze_liveness(save_path)
 
-    status = "verified"
-    if match_score < 0.15:
+    if match_score <= 0.10:
         status = "fake"
-    elif liveness_status.lower() != "real":
+    elif match_score <= 0.30:
+        status = "duplicate"
+    else:
+        status = "verified"
+
+    # Override with liveness status
+    if liveness_status.lower() != "real":
         status = "fake"
 
     current_user_id = int(get_jwt_identity())
