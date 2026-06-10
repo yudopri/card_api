@@ -8,3 +8,6 @@ Werkzeug
 ultralytics
 torch
 torchvision
+flasgger
+flask_cors
+flask_migrate
