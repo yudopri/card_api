@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from werkzeug.utils import secure_filename
 from app.models.models import IDCard, User
 from app.core.extensions import db
+from app.services.detection_service import detect_and_crop_with_model
 from app.services.image_service import calculate_phash
 import os
 
@@ -42,12 +43,35 @@ def register_id():
       - name: unique_crop_photo
         in: formData
         type: file
-        required: true
+        required: false
+        description: Optional fallback crop image. If omitted, the API will try to crop automatically using best.pt.
     responses:
       201:
         description: Registered successfully
+        schema:
+          type: object
+          properties:
+            msg:
+              type: string
+            phash:
+              type: string
+            crop_path:
+              type: string
+            boxed_path:
+              type: string
+            crop_source:
+              type: string
       400:
         description: Missing data/QR code exists
+        schema:
+          type: object
+          properties:
+            msg:
+              type: string
+            status:
+              type: string
+            error_code:
+              type: string
       403:
         description: Admin role required
     """
@@ -65,9 +89,9 @@ def register_id():
 
     current_app.logger.debug(f"Register-ID request: fullname={fullname}, nip={nip}, job_title={job_title}, qr_code={qr_code}, has_file={file is not None}, has_crop={crop_file is not None}")
 
-    if not all([fullname, qr_code, file, crop_file]):
+    if not all([fullname, qr_code, file]):
         return jsonify({
-            "msg": "Missing fullname, qr_code, id_card_photo or unique_crop_photo",
+            "msg": "Missing fullname, qr_code, or id_card_photo",
             "received": {
                 "fullname": fullname,
                 "nip": nip,
@@ -122,10 +146,23 @@ def register_id():
     image_path = os.path.join(upload_dir, f"{safe_qr_code}_{final_filename}")
     file.save(image_path)
 
-    # Save unique crop photo
+    # Generate crop using object detection first, then fall back to uploaded crop.
     crop_filename = f"crop_{final_filename}"
+    boxed_filename = f"boxed_{final_filename}"
     crop_path = os.path.join(upload_dir, f"{safe_qr_code}_{crop_filename}")
-    crop_file.save(crop_path)
+    boxed_path = os.path.join(upload_dir, f"{safe_qr_code}_{boxed_filename}")
+    detection_result = detect_and_crop_with_model(image_path, crop_path, boxed_path)
+    crop_source = "model" if detection_result else "manual_or_original"
+    if detection_result:
+        crop_path = detection_result["crop_path"]
+        boxed_path = detection_result["boxed_path"]
+    else:
+        boxed_path = None
+        if crop_file:
+            crop_file.save(crop_path)
+        else:
+            crop_path = image_path
+            crop_source = "original_image"
 
     # Calculate pHash
     phash_value = calculate_phash(image_path)
@@ -149,7 +186,13 @@ def register_id():
     db.session.add(new_card)
     db.session.commit()
 
-    return jsonify({"msg": "ID Card registered successfully", "phash": phash_value}), 201
+    return jsonify({
+        "msg": "ID Card registered successfully",
+        "phash": phash_value,
+        "crop_path": crop_path,
+        "boxed_path": boxed_path,
+        "crop_source": crop_source
+    }), 201
 
 @admin_bp.route('/id-cards', methods=['GET'])
 @jwt_required()
