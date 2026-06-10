@@ -161,8 +161,10 @@ def register_id():
         if crop_file:
             crop_file.save(crop_path)
         else:
-            crop_path = image_path
-            crop_source = "original_image"
+            return jsonify({
+                "msg": "Failed to create crop from id_card_photo. Please upload unique_crop_photo as fallback.",
+                "crop_source": "none"
+            }), 400
 
     # Calculate pHash
     phash_value = calculate_phash(image_path)

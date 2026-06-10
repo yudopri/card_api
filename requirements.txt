@@ -6,3 +6,5 @@ Pillow
 imagehash
 Werkzeug
 ultralytics
+torch
+torchvision

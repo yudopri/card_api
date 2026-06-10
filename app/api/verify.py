@@ -5,7 +5,7 @@ from app.models.models import IDCard, Logbook
 from app.core.extensions import db
 from app.services.detection_service import detect_and_crop_with_model
 from app.services.image_service import calculate_phash, analyze_liveness
-from app.services.matcher_service import compute_feature_match_score
+from app.services.matcher_service import THRESHOLD_LULUS, compute_feature_match_score
 import os
 
 verify_bp = Blueprint("verify", __name__)
@@ -109,30 +109,35 @@ def scan_verify():
         scan_boxed_path = detection_result["boxed_path"]
         scan_crop_source = "model"
     else:
-        scan_compare_path = save_path
-        scan_boxed_path = None
-        scan_crop_source = "original_image"
+        return jsonify({
+            "msg": "Failed to create crop from scanned_image",
+            "scan_crop_source": "none"
+        }), 400
 
-    # PEMBARUAN: Gunakan unique_crop_path sebagai pembanding (Anchor)
-    # karena scanned_image yang dikirim adalah hasil cropping juga.
     master_crop_path = id_card.unique_crop_path
     
-    # Fallback ke id_card_image_path jika crop tidak ada (untuk kompatibilitas)
     if not master_crop_path or not os.path.exists(master_crop_path):
-        master_crop_path = id_card.id_card_image_path
+        master_base, master_ext = os.path.splitext(id_card.id_card_image_path)
+        master_crop_path = f"{master_base}_crop{master_ext or '.jpg'}"
+        master_boxed_path = f"{master_base}_boxed{master_ext or '.jpg'}"
+        master_detection_result = detect_and_crop_with_model(
+            id_card.id_card_image_path,
+            master_crop_path,
+            master_boxed_path,
+        )
+        if master_detection_result:
+            master_crop_path = master_detection_result["crop_path"]
 
     if not master_crop_path or not os.path.exists(master_crop_path):
-        return jsonify({"msg": "Reference image missing on server"}), 500
+        return jsonify({"msg": "Reference crop image missing on server"}), 500
         
     match_score = compute_feature_match_score(master_crop_path, scan_compare_path)
     liveness_score, liveness_status = analyze_liveness(save_path)
 
-    if match_score <= 0.10:
-        status = "fake"
-    elif match_score <= 0.30:
-        status = "duplicate"
-    else:
+    if match_score >= THRESHOLD_LULUS:
         status = "verified"
+    else:
+        status = "fake"
 
     # Override with liveness status
     if liveness_status.lower() != "real":
@@ -142,7 +147,7 @@ def scan_verify():
     new_log = Logbook(
         id_card_id=id_card.id,
         petugas_id=current_user_id,
-        scan_image_path=save_path,
+        scan_image_path=scan_compare_path,
         status=status,
         match_score=float(match_score),
         liveness_score=float(liveness_score),
