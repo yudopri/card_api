@@ -11,3 +11,4 @@ torchvision
 flasgger
 flask_cors
 flask_migrate
+psycopg2
