@@ -12,3 +12,4 @@ flasgger
 flask_cors
 flask_migrate
 psycopg2
+scikit-image
